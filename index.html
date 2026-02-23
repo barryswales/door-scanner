@@ -336,9 +336,137 @@
         .setup-panel.collapsed .chevron {
             transform: rotate(-90deg);
         }
+        
+        /* Toggle switches */
+        .toggles-row {
+            display: flex;
+            justify-content: space-around;
+            background: #252542;
+            border-radius: 12px;
+            padding: 12px;
+            margin-bottom: 16px;
+        }
+        
+        .toggle-item {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 6px;
+        }
+        
+        .toggle-item span {
+            font-size: 11px;
+            color: #888;
+        }
+        
+        .toggle-btn {
+            width: 48px;
+            height: 48px;
+            border-radius: 12px;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+            transition: all 0.2s;
+            background: #1a1a2e;
+            color: #666;
+        }
+        
+        .toggle-btn.active {
+            background: #2d4a3e;
+            color: #4CAF50;
+        }
+        
+        /* Flash overlay for scan feedback */
+        .flash-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            pointer-events: none;
+            opacity: 0;
+            z-index: 9999;
+            transition: opacity 0.1s;
+        }
+        
+        .flash-overlay.success {
+            background: #4CAF50;
+            animation: flash 0.4s ease-out;
+        }
+        
+        .flash-overlay.error {
+            background: #f44336;
+            animation: flash 0.4s ease-out;
+        }
+        
+        @keyframes flash {
+            0% { opacity: 0.8; }
+            100% { opacity: 0; }
+        }
+        
+        /* Big scan result popup */
+        .scan-popup {
+            position: fixed;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%) scale(0.8);
+            background: #1a1a2e;
+            border-radius: 20px;
+            padding: 40px;
+            text-align: center;
+            z-index: 1000;
+            opacity: 0;
+            pointer-events: none;
+            transition: all 0.2s ease-out;
+            border: 4px solid #4CAF50;
+            min-width: 280px;
+        }
+        
+        .scan-popup.show {
+            opacity: 1;
+            transform: translate(-50%, -50%) scale(1);
+        }
+        
+        .scan-popup.error {
+            border-color: #f44336;
+        }
+        
+        .scan-popup .icon {
+            font-size: 64px;
+            margin-bottom: 16px;
+        }
+        
+        .scan-popup .direction-label {
+            font-size: 32px;
+            font-weight: 700;
+            margin-bottom: 8px;
+        }
+        
+        .scan-popup .direction-label.in {
+            color: #4CAF50;
+        }
+        
+        .scan-popup .direction-label.out {
+            color: #f44336;
+        }
+        
+        .scan-popup .scan-id {
+            font-size: 24px;
+            color: #888;
+        }
     </style>
 </head>
 <body>
+    <!-- Flash overlay -->
+    <div class="flash-overlay" id="flashOverlay"></div>
+    
+    <!-- Scan popup -->
+    <div class="scan-popup" id="scanPopup">
+        <div class="icon" id="popupIcon">✓</div>
+        <div class="direction-label in" id="popupDirection">IN</div>
+        <div class="scan-id" id="popupId">PAR001</div>
+    </div>
+    
     <div class="container">
         <!-- Header -->
         <div class="header">
@@ -387,6 +515,26 @@
             </button>
         </div>
         
+        <!-- Feedback Toggles -->
+        <div class="toggles-row">
+            <div class="toggle-item">
+                <button class="toggle-btn active" id="toggleFlash" onclick="toggleFeedback('flash')">💡</button>
+                <span>Flash</span>
+            </div>
+            <div class="toggle-item">
+                <button class="toggle-btn active" id="togglePopup" onclick="toggleFeedback('popup')">📢</button>
+                <span>Popup</span>
+            </div>
+            <div class="toggle-item">
+                <button class="toggle-btn active" id="toggleVibrate" onclick="toggleFeedback('vibrate')">📳</button>
+                <span>Vibrate</span>
+            </div>
+            <div class="toggle-item">
+                <button class="toggle-btn active" id="toggleBeep" onclick="toggleFeedback('beep')">🔊</button>
+                <span>Beep</span>
+            </div>
+        </div>
+        
         <!-- Scanner -->
         <div class="scanner-container">
             <div id="reader"></div>
@@ -424,6 +572,14 @@
         let lastScanTime = 0;
         const SCAN_COOLDOWN = 2000; // 2 seconds between scans
         
+        // Feedback settings
+        let feedback = {
+            flash: true,
+            popup: true,
+            vibrate: true,
+            beep: true
+        };
+        
         // Settings
         let settings = {
             apiUrl: '',
@@ -432,6 +588,26 @@
             sessionId: '',
             scannerName: 'PHONE_1'
         };
+        
+        // Toggle feedback setting
+        function toggleFeedback(type) {
+            feedback[type] = !feedback[type];
+            const btn = document.getElementById('toggle' + type.charAt(0).toUpperCase() + type.slice(1));
+            btn.classList.toggle('active', feedback[type]);
+            localStorage.setItem('doorScannerFeedback', JSON.stringify(feedback));
+        }
+        
+        // Load feedback settings
+        function loadFeedbackSettings() {
+            const saved = localStorage.getItem('doorScannerFeedback');
+            if (saved) {
+                feedback = { ...feedback, ...JSON.parse(saved) };
+                Object.keys(feedback).forEach(type => {
+                    const btn = document.getElementById('toggle' + type.charAt(0).toUpperCase() + type.slice(1));
+                    if (btn) btn.classList.toggle('active', feedback[type]);
+                });
+            }
+        }
         
         // Load settings from localStorage
         function loadSettings() {
@@ -486,6 +662,60 @@
             statusEl.className = 'status ' + type;
         }
         
+        // Flash the screen
+        function flashScreen(success) {
+            const overlay = document.getElementById('flashOverlay');
+            overlay.classList.remove('success', 'error');
+            void overlay.offsetWidth; // Force reflow to restart animation
+            overlay.classList.add(success ? 'success' : 'error');
+        }
+        
+        // Play beep sound
+        function playBeep(success) {
+            try {
+                const ctx = new (window.AudioContext || window.webkitAudioContext)();
+                const oscillator = ctx.createOscillator();
+                const gainNode = ctx.createGain();
+                
+                oscillator.connect(gainNode);
+                gainNode.connect(ctx.destination);
+                
+                oscillator.frequency.value = success ? 880 : 220; // High beep for success, low for error
+                oscillator.type = 'sine';
+                
+                gainNode.gain.setValueAtTime(0.3, ctx.currentTime);
+                gainNode.gain.exponentialRampToValueAtTime(0.01, ctx.currentTime + 0.2);
+                
+                oscillator.start(ctx.currentTime);
+                oscillator.stop(ctx.currentTime + 0.2);
+            } catch (e) {
+                // Audio not supported
+            }
+        }
+        
+        // Show scan popup
+        function showScanPopup(scanValue, dir, success) {
+            const popup = document.getElementById('scanPopup');
+            const icon = document.getElementById('popupIcon');
+            const dirLabel = document.getElementById('popupDirection');
+            const idLabel = document.getElementById('popupId');
+            
+            icon.textContent = success ? '✓' : '✗';
+            dirLabel.textContent = dir;
+            dirLabel.className = 'direction-label ' + dir.toLowerCase();
+            idLabel.textContent = scanValue;
+            
+            popup.classList.remove('error');
+            if (!success) popup.classList.add('error');
+            popup.style.borderColor = success ? (dir === 'IN' ? '#4CAF50' : '#f44336') : '#f44336';
+            
+            popup.classList.add('show');
+            
+            setTimeout(() => {
+                popup.classList.remove('show');
+            }, 1500);
+        }
+        
         // Process scan
         async function processScan(scanValue) {
             // Cooldown check
@@ -495,9 +725,9 @@
             }
             lastScanTime = now;
             
-            // Vibrate if supported
-            if (navigator.vibrate) {
-                navigator.vibrate(100);
+            // Vibrate if enabled and supported
+            if (feedback.vibrate && navigator.vibrate) {
+                navigator.vibrate([100, 50, 100]);
             }
             
             showStatus(`Scanning: ${scanValue}...`, 'scanning');
@@ -513,6 +743,9 @@
             try {
                 if (!settings.apiUrl) {
                     // Demo mode - just log locally
+                    if (feedback.flash) flashScreen(true);
+                    if (feedback.beep) playBeep(true);
+                    if (feedback.popup) showScanPopup(scanValue, direction, true);
                     addToRecent(scanValue, direction, true);
                     showStatus(`✓ ${direction}: ${scanValue}`, 'success');
                     return;
@@ -535,13 +768,22 @@
                 const result = await response.json();
                 
                 if (result.success) {
+                    if (feedback.flash) flashScreen(true);
+                    if (feedback.beep) playBeep(true);
+                    if (feedback.popup) showScanPopup(scanValue, direction, true);
                     addToRecent(scanValue, direction, true);
                     showStatus(`✓ ${direction}: ${scanValue}`, 'success');
                 } else {
+                    if (feedback.flash) flashScreen(false);
+                    if (feedback.beep) playBeep(false);
+                    if (feedback.popup) showScanPopup(scanValue, direction, false);
                     addToRecent(scanValue, direction, false, result.error);
                     showStatus(`✗ Error: ${result.error}`, 'error');
                 }
             } catch (error) {
+                if (feedback.flash) flashScreen(false);
+                if (feedback.beep) playBeep(false);
+                if (feedback.popup) showScanPopup(scanValue, direction, false);
                 addToRecent(scanValue, direction, false, error.message);
                 showStatus(`✗ Network error`, 'error');
                 console.error('Scan error:', error);
@@ -633,6 +875,7 @@
         
         // Initialize
         loadSettings();
+        loadFeedbackSettings();
         
         // Auto-start scanner if settings exist
         if (settings.apiUrl || true) { // Always try to start
