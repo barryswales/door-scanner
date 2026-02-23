@@ -404,55 +404,52 @@
             100% { opacity: 0; }
         }
         
-        /* Big scan result popup */
-        .scan-popup {
+        /* Small corner indicator */
+        .scan-indicator {
             position: fixed;
-            top: 50%;
-            left: 50%;
-            transform: translate(-50%, -50%) scale(0.8);
-            background: #1a1a2e;
-            border-radius: 20px;
-            padding: 40px;
-            text-align: center;
+            top: 16px;
+            right: 16px;
+            width: 80px;
+            height: 80px;
+            border-radius: 16px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
             z-index: 1000;
             opacity: 0;
+            transform: scale(0.8);
+            transition: all 0.15s ease-out;
             pointer-events: none;
-            transition: all 0.2s ease-out;
-            border: 4px solid #4CAF50;
-            min-width: 280px;
         }
         
-        .scan-popup.show {
+        .scan-indicator.show {
             opacity: 1;
-            transform: translate(-50%, -50%) scale(1);
+            transform: scale(1);
         }
         
-        .scan-popup.error {
-            border-color: #f44336;
+        .scan-indicator.in {
+            background: #4CAF50;
         }
         
-        .scan-popup .icon {
-            font-size: 64px;
-            margin-bottom: 16px;
+        .scan-indicator.out {
+            background: #ff9800;
         }
         
-        .scan-popup .direction-label {
-            font-size: 32px;
+        .scan-indicator.error {
+            background: #f44336;
+        }
+        
+        .scan-indicator .icon {
+            font-size: 36px;
+            line-height: 1;
+        }
+        
+        .scan-indicator .label {
+            font-size: 14px;
             font-weight: 700;
-            margin-bottom: 8px;
-        }
-        
-        .scan-popup .direction-label.in {
-            color: #4CAF50;
-        }
-        
-        .scan-popup .direction-label.out {
-            color: #f44336;
-        }
-        
-        .scan-popup .scan-id {
-            font-size: 24px;
-            color: #888;
+            color: white;
+            margin-top: 2px;
         }
     </style>
 </head>
@@ -461,10 +458,9 @@
     <div class="flash-overlay" id="flashOverlay"></div>
     
     <!-- Scan popup -->
-    <div class="scan-popup" id="scanPopup">
-        <div class="icon" id="popupIcon">✓</div>
-        <div class="direction-label in" id="popupDirection">IN</div>
-        <div class="scan-id" id="popupId">PAR001</div>
+    <div class="scan-indicator" id="scanIndicator">
+        <div class="icon" id="indicatorIcon">✓</div>
+        <div class="label" id="indicatorLabel">IN</div>
     </div>
     
     <div class="container">
@@ -522,8 +518,8 @@
                 <span>Flash</span>
             </div>
             <div class="toggle-item">
-                <button class="toggle-btn active" id="togglePopup" onclick="toggleFeedback('popup')">📢</button>
-                <span>Popup</span>
+                <button class="toggle-btn active" id="togglePopup" onclick="toggleFeedback('popup')">✓</button>
+                <span>Indicator</span>
             </div>
             <div class="toggle-item">
                 <button class="toggle-btn active" id="toggleVibrate" onclick="toggleFeedback('vibrate')">📳</button>
@@ -570,7 +566,7 @@
         let html5QrCode = null;
         let isScanning = false;
         let lastScanTime = 0;
-        const SCAN_COOLDOWN = 2000; // 2 seconds between scans
+        const SCAN_COOLDOWN = 1000; // 1 second between scans
         
         // Feedback settings
         let feedback = {
@@ -693,27 +689,28 @@
             }
         }
         
-        // Show scan popup
+        // Show scan indicator (corner)
         function showScanPopup(scanValue, dir, success) {
-            const popup = document.getElementById('scanPopup');
-            const icon = document.getElementById('popupIcon');
-            const dirLabel = document.getElementById('popupDirection');
-            const idLabel = document.getElementById('popupId');
+            const indicator = document.getElementById('scanIndicator');
+            const icon = document.getElementById('indicatorIcon');
+            const label = document.getElementById('indicatorLabel');
             
             icon.textContent = success ? '✓' : '✗';
-            dirLabel.textContent = dir;
-            dirLabel.className = 'direction-label ' + dir.toLowerCase();
-            idLabel.textContent = scanValue;
+            label.textContent = success ? dir : 'ERR';
             
-            popup.classList.remove('error');
-            if (!success) popup.classList.add('error');
-            popup.style.borderColor = success ? (dir === 'IN' ? '#4CAF50' : '#f44336') : '#f44336';
+            indicator.classList.remove('in', 'out', 'error', 'show');
             
-            popup.classList.add('show');
+            if (success) {
+                indicator.classList.add(dir.toLowerCase());
+            } else {
+                indicator.classList.add('error');
+            }
+            
+            indicator.classList.add('show');
             
             setTimeout(() => {
-                popup.classList.remove('show');
-            }, 1500);
+                indicator.classList.remove('show');
+            }, 800);
         }
         
         // Process scan
@@ -850,7 +847,7 @@
             html5QrCode = new Html5Qrcode("reader");
             
             const config = {
-                fps: 10,
+                fps: 15,
                 qrbox: { width: 250, height: 250 },
                 aspectRatio: 1.0
             };
